@@ -1,168 +1,216 @@
-import React, { useEffect, useState } from "react";
-import { API } from "../api";
+const express = require("express");
+const cors = require("cors");
+require("dotenv").config();
+require("./db");
 
-export default function Dashboard() {
-  const [summary, setSummary] = useState({});
-  const [categoryData, setCategoryData] = useState({});
-  const [transactions, setTransactions] = useState([]); // ✅ NEW
-  const [loading, setLoading] = useState(true);
+const app = express();
+const PORT = process.env.PORT || 5000;
 
-  useEffect(() => {
-    let isMounted = true;
+// 🔹 Models
+const Transaction = require("./models/Transaction");
 
-    const fetchData = async () => {
-      try {
-        setLoading(true);
+// ==========================
+// ✅ Middleware
+// ==========================
+app.use(cors({
+  origin: [
+    "http://localhost:3000",
+    "https://your-vercel-app.vercel.app"
+  ],
+  credentials: true
+}));
+app.use(express.json());
 
-        const [summaryRes, categoryRes, txnRes] = await Promise.all([
-          API.get("/transactions/summary"),
-          API.get("/transactions/category-summary"),
-          API.get("/transactions"), // ✅ IMPORTANT FIX
-        ]);
+// 🔥 SAFE TYPE CONVERTER MIDDLEWARE
+app.use((req, res, next) => {
+  if (req.body?.amount !== undefined) {
+    req.body.amount = Number(req.body.amount || 0);
+  }
+  next();
+});
 
-        if (!isMounted) return;
+// ==========================
+// 📒 ROUTES
+// ==========================
+app.use("/api/persons", require("./routes/personRoutes"));
 
-        setSummary(summaryRes?.data || {});
-        setCategoryData(categoryRes?.data || {});
-        setTransactions(txnRes?.data || []); // ✅ FIX
-      } catch (err) {
-        console.error("Dashboard load error:", err);
+// ==========================
+// 💰 CREATE TRANSACTION
+// ==========================
+app.post("/api/transactions", async (req, res) => {
+  try {
+    const transaction = await Transaction.create({
+      type: req.body.type,
+      category: req.body.category || "",
+      subCategory: req.body.subCategory || "",
+      subType: req.body.subType || "",
+      amount: req.body.amount || 0,
+      note: req.body.note || "",
+      date: req.body.date || new Date(),
+      personId: req.body.personId || req.body.person || null,
+    });
 
-        if (!isMounted) return;
+    res.json(transaction);
+  } catch (err) {
+    console.error("CREATE ERROR:", err);
+    res.status(500).json({ error: "Failed to save transaction" });
+  }
+});
 
-        setSummary({});
-        setCategoryData({});
-        setTransactions([]);
-      } finally {
-        if (!isMounted) return;
-        setLoading(false);
-      }
+// ==========================
+// 📊 GET ALL TRANSACTIONS
+// ==========================
+app.get("/api/transactions", async (req, res) => {
+  try {
+    const list = await Transaction.find()
+      .populate("personId")
+      .sort({ date: -1 });
+
+    res.json(list);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch transactions" });
+  }
+});
+
+// ==========================
+// 📄 SINGLE TRANSACTION
+// ==========================
+app.get("/api/transactions/:id", async (req, res) => {
+  try {
+    const t = await Transaction.findById(req.params.id).populate("personId");
+    res.json(t);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch transaction" });
+  }
+});
+
+// ==========================
+// ✏️ UPDATE TRANSACTION
+// ==========================
+app.put("/api/transactions/:id", async (req, res) => {
+  try {
+    const t = await Transaction.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true }
+    );
+
+    res.json(t);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Update failed" });
+  }
+});
+
+// ==========================
+// 📒 LEDGER (IMPORTANT FIXED)
+// ==========================
+app.get("/api/ledger/:personId", async (req, res) => {
+  try {
+    const data = await Transaction.find({
+      personId: req.params.personId,
+    })
+      .populate("personId")
+      .sort({ date: -1 });
+
+    res.json(data);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Ledger load failed" });
+  }
+});
+
+// ==========================
+// 📊 SUMMARY (IMPROVED SAFE)
+// ==========================
+app.get("/api/transactions/summary", async (req, res) => {
+  try {
+    const list = await Transaction.find();
+
+    const sum = {
+      income: 0,
+      expense: 0,
+      investment: 0,
+      asset: 0,
+      liability: 0,
     };
 
-    fetchData();
+    list.forEach((t) => {
+      const amount = Number(t.amount || 0);
 
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+      if (t.type === "income") sum.income += amount;
+      if (t.type === "expense") sum.expense += amount;
+      if (t.type === "investment") sum.investment += amount;
 
-  const toNumber = (val) => (isNaN(Number(val)) ? 0 : Number(val));
+      if (t.subType === "asset") sum.asset += amount;
+      if (t.subType === "liability") sum.liability += amount;
+    });
 
-  const income = toNumber(summary.income);
-  const expense = toNumber(summary.expense);
-  const investment = toNumber(summary.investment);
-  const asset = toNumber(summary.asset);
-  const liability = toNumber(summary.liability);
+    res.json(sum);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Summary failed" });
+  }
+});
 
-  const net = income - expense;
+// ==========================
+// 📊 CATEGORY SUMMARY
+// ==========================
+app.get("/api/transactions/category-summary", async (req, res) => {
+  try {
+    const list = await Transaction.find({ type: "expense" });
 
-  const categoryPairs = Object.entries(categoryData || {})
-    .map(([k, v]) => [k, toNumber(v)])
-    .filter(([, v]) => v !== 0)
-    .sort((a, b) => b[1] - a[1]);
+    const map = {};
 
-  return (
-    <div className="page">
+    list.forEach((t) => {
+      const key = t.category || "others";
+      map[key] = (map[key] || 0) + Number(t.amount || 0);
+    });
 
-      {/* HEADER */}
-      <div className="page-header">
-        <div>
-          <h1>Dashboard</h1>
-          <p>Quick overview of your finance activity.</p>
-        </div>
+    res.json(map);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Category summary failed" });
+  }
+});
 
-        <span className="pill">
-          {loading ? "Loading…" : "Live"}
-        </span>
-      </div>
+// ==========================
+// 📅 MONTHLY REPORT (FIXED SAFE)
+// ==========================
+app.get("/api/transactions/monthly", async (req, res) => {
+  try {
+    const { month } = req.query;
 
-      {/* TOP GRID */}
-      <div className="grid">
-        <Card title="Income" value={income} />
-        <Card title="Expense" value={expense} />
-        <Card title="Net" value={net} />
-        <Card title="Investment" value={investment} />
-        <Card title="Asset" value={asset} />
-        <Card title="Liability" value={liability} />
-      </div>
+    if (!month) {
+      return res.status(400).json({ error: "Month required (YYYY-MM)" });
+    }
 
-      {/* TRANSACTIONS LIST ✅ NEW SECTION */}
-      <div className="card">
-        <div className="card-title">Recent Transactions</div>
+    const start = new Date(`${month}-01`);
+    const end = new Date(`${month}-31`);
 
-        {transactions.length === 0 ? (
-          <p>No transactions found</p>
-        ) : (
-          transactions.slice(0, 10).map((t) => (
-            <div key={t._id} className="list-item">
-              <span>
-                {t.type} {t.category ? `(${t.category})` : ""}
-              </span>
-              <strong>₹ {toNumber(t.amount).toFixed(2)}</strong>
-            </div>
-          ))
-        )}
-      </div>
+    const list = await Transaction.find({
+      date: { $gte: start, $lte: end },
+    });
 
-      {/* CATEGORY BREAKDOWN */}
-      <div className="grid">
-        <div className="card" style={{ gridColumn: "span 7" }}>
-          <div className="card-title">Expense Breakdown</div>
+    res.json(list);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Monthly report failed" });
+  }
+});
 
-          <div className="list">
-            {categoryPairs.length === 0 ? (
-              <div className="list-item">
-                <span>No expense data</span>
-                <strong>₹0</strong>
-              </div>
-            ) : (
-              categoryPairs.slice(0, 10).map(([key, value]) => (
-                <div className="list-item" key={key}>
-                  <span style={{ textTransform: "capitalize" }}>
-                    {key}
-                  </span>
-                  <strong>₹{value.toFixed(2)}</strong>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+// ==========================
+// 🩺 HEALTH CHECK
+// ==========================
+app.get("/", (req, res) => {
+  res.send("✅ API running...");
+});
 
-        <div className="card" style={{ gridColumn: "span 5" }}>
-          <div className="card-title">Health</div>
-
-          <div className="list">
-            <div className="list-item">
-              <span>Saving rate</span>
-              <strong>
-                {income > 0 ? `${((net / income) * 100).toFixed(1)}%` : "—"}
-              </strong>
-            </div>
-
-            <div className="list-item">
-              <span>Expense ratio</span>
-              <strong>
-                {income > 0 ? `${((expense / income) * 100).toFixed(1)}%` : "—"}
-              </strong>
-            </div>
-
-            <div className="list-item">
-              <span>Loan balance</span>
-              <strong>₹{(asset - liability).toFixed(2)}</strong>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* CARD */
-function Card({ title, value }) {
-  return (
-    <div className="card" style={{ gridColumn: "span 4" }}>
-      <div className="card-title">{title}</div>
-      <div className="card-value">₹ {value.toFixed(2)}</div>
-    </div>
-  );
-}
+// ==========================
+// 🚀 START SERVER
+// ==========================
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
+});
