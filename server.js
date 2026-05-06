@@ -1,27 +1,37 @@
 const express = require("express");
 const cors = require("cors");
+const mongoose = require("mongoose");
 require("dotenv").config();
-require("./db");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// 🔹 Models
+// ==========================
+// ✅ DB CONNECT
+// ==========================
+mongoose.connect(process.env.MONGODB_URI)
+  .then(() => console.log("✅ MongoDB Connected"))
+  .catch(err => console.error("❌ DB Error:", err));
+
+// ==========================
+// ✅ MODELS
+// ==========================
 const Transaction = require("./models/Transaction");
 
 // ==========================
-// ✅ Middleware
+// ✅ MIDDLEWARE
 // ==========================
 app.use(cors({
   origin: [
     "http://localhost:3000",
-    "https://your-vercel-app.vercel.app"
+    "https://finance-app-frontend-blush.vercel.app"
   ],
   credentials: true
 }));
+
 app.use(express.json());
 
-// 🔥 SAFE TYPE CONVERTER MIDDLEWARE
+// SAFE TYPE FIX
 app.use((req, res, next) => {
   if (req.body?.amount !== undefined) {
     req.body.amount = Number(req.body.amount || 0);
@@ -35,95 +45,7 @@ app.use((req, res, next) => {
 app.use("/api/persons", require("./routes/personRoutes"));
 
 // ==========================
-// 💰 CREATE TRANSACTION
-// ==========================
-app.post("/api/transactions", async (req, res) => {
-  try {
-    const transaction = await Transaction.create({
-      type: req.body.type,
-      category: req.body.category || "",
-      subCategory: req.body.subCategory || "",
-      subType: req.body.subType || "",
-      amount: req.body.amount || 0,
-      note: req.body.note || "",
-      date: req.body.date || new Date(),
-      personId: req.body.personId || req.body.person || null,
-    });
-
-    res.json(transaction);
-  } catch (err) {
-    console.error("CREATE ERROR:", err);
-    res.status(500).json({ error: "Failed to save transaction" });
-  }
-});
-
-// ==========================
-// 📊 GET ALL TRANSACTIONS
-// ==========================
-app.get("/api/transactions", async (req, res) => {
-  try {
-    const list = await Transaction.find()
-      .populate("personId")
-      .sort({ date: -1 });
-
-    res.json(list);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to fetch transactions" });
-  }
-});
-
-// ==========================
-// 📄 SINGLE TRANSACTION
-// ==========================
-app.get("/api/transactions/:id", async (req, res) => {
-  try {
-    const t = await Transaction.findById(req.params.id).populate("personId");
-    res.json(t);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to fetch transaction" });
-  }
-});
-
-// ==========================
-// ✏️ UPDATE TRANSACTION
-// ==========================
-app.put("/api/transactions/:id", async (req, res) => {
-  try {
-    const t = await Transaction.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true }
-    );
-
-    res.json(t);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Update failed" });
-  }
-});
-
-// ==========================
-// 📒 LEDGER (IMPORTANT FIXED)
-// ==========================
-app.get("/api/ledger/:personId", async (req, res) => {
-  try {
-    const data = await Transaction.find({
-      personId: req.params.personId,
-    })
-      .populate("personId")
-      .sort({ date: -1 });
-
-    res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Ledger load failed" });
-  }
-});
-
-// ==========================
-// 📊 SUMMARY (IMPROVED SAFE)
+// 📊 SUMMARY (IMPORTANT: UP)
 // ==========================
 app.get("/api/transactions/summary", async (req, res) => {
   try {
@@ -150,13 +72,13 @@ app.get("/api/transactions/summary", async (req, res) => {
 
     res.json(sum);
   } catch (err) {
-    console.error(err);
+    console.error("SUMMARY ERROR:", err);
     res.status(500).json({ error: "Summary failed" });
   }
 });
 
 // ==========================
-// 📊 CATEGORY SUMMARY
+// 📊 CATEGORY SUMMARY (UP)
 // ==========================
 app.get("/api/transactions/category-summary", async (req, res) => {
   try {
@@ -171,13 +93,99 @@ app.get("/api/transactions/category-summary", async (req, res) => {
 
     res.json(map);
   } catch (err) {
-    console.error(err);
+    console.error("CATEGORY ERROR:", err);
     res.status(500).json({ error: "Category summary failed" });
   }
 });
 
 // ==========================
-// 📅 MONTHLY REPORT (FIXED SAFE)
+// 💰 CREATE
+// ==========================
+app.post("/api/transactions", async (req, res) => {
+  try {
+    const transaction = await Transaction.create({
+      ...req.body
+    });
+
+    res.json(transaction);
+  } catch (err) {
+    console.error("CREATE ERROR:", err);
+    res.status(500).json({ error: "Failed to save transaction" });
+  }
+});
+
+// ==========================
+// 📊 GET ALL
+// ==========================
+app.get("/api/transactions", async (req, res) => {
+  try {
+    const list = await Transaction.find()
+      .populate("personId")
+      .sort({ date: -1 });
+
+    res.json(list);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch transactions" });
+  }
+});
+
+// ==========================
+// 📄 SINGLE (IMPORTANT: LAST)
+// ==========================
+app.get("/api/transactions/:id", async (req, res) => {
+  try {
+    const t = await Transaction.findById(req.params.id).populate("personId");
+
+    if (!t) {
+      return res.status(404).json({ error: "Not found" });
+    }
+
+    res.json(t);
+  } catch (err) {
+    console.error("ID ERROR:", err);
+    res.status(500).json({ error: "Failed to fetch transaction" });
+  }
+});
+
+// ==========================
+// ✏️ UPDATE
+// ==========================
+app.put("/api/transactions/:id", async (req, res) => {
+  try {
+    const t = await Transaction.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true }
+    );
+
+    res.json(t);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Update failed" });
+  }
+});
+
+// ==========================
+// 📒 LEDGER
+// ==========================
+app.get("/api/ledger/:personId", async (req, res) => {
+  try {
+    const data = await Transaction.find({
+      personId: req.params.personId,
+    })
+      .populate("personId")
+      .sort({ date: -1 });
+
+    res.json(data);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Ledger load failed" });
+  }
+});
+
+// ==========================
+// 📅 MONTHLY
 // ==========================
 app.get("/api/transactions/monthly", async (req, res) => {
   try {
@@ -209,7 +217,7 @@ app.get("/", (req, res) => {
 });
 
 // ==========================
-// 🚀 START SERVER
+// 🚀 START
 // ==========================
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
