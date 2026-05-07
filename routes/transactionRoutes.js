@@ -1,59 +1,337 @@
 const express = require("express");
 const router = express.Router();
+
 const Transaction = require("../models/Transaction");
 
-// Add Transaction
+// =====================================
+// ➕ ADD TRANSACTION
+// =====================================
 router.post("/", async (req, res) => {
-  const data = await Transaction.create(req.body);
-  res.json(data);
-});
+  try {
 
-// Get All
-router.get("/", async (req, res) => {
-  const data = await Transaction.find().sort({ date: -1 });
-  res.json(data);
-});
+    const {
+      personId,
+      type,
+      amount,
+    } = req.body;
 
-// Summary
-router.get("/summary", async (req, res) => {
-  const data = await Transaction.find();
+    // =========================
+    // PREVIOUS LEDGER BALANCE
+    // =========================
+    const oldTransactions =
+      await Transaction.find({
+        personId,
+      });
 
-  let summary = {
-    income: 0,
-    expense: 0,
-    investment: 0,
-    asset: 0,
-    liability: 0,
-  };
+    let drTotal = 0;
+    let crTotal = 0;
 
-  data.forEach((t) => {
-    if (t.type === "income") summary.income += t.amount;
-    if (t.type === "expense") summary.expense += t.amount;
-    if (t.type === "investment") summary.investment += t.amount;
+    oldTransactions.forEach((t) => {
 
-    if (t.type === "loan") {
-      if (t.subType === "asset") summary.asset += t.amount;
-      if (t.subType === "liability") summary.liability += t.amount;
+      if (t.drcr === "DR") {
+        drTotal += Number(t.amount || 0);
+      }
+
+      else if (t.drcr === "CR") {
+        crTotal += Number(t.amount || 0);
+      }
+
+    });
+
+    let runningBalance =
+      drTotal - crTotal;
+
+    // =========================
+    // AUTO DR CR
+    // =========================
+    let drcr = "";
+
+    // PAYMENT / EXPENSE
+    if (
+      type === "expense" ||
+      type === "payment"
+    ) {
+
+      drcr = "DR";
+
+      runningBalance =
+        runningBalance +
+        Number(amount || 0);
+
     }
-  });
 
-  res.json(summary);
+    // RECEIVED / INCOME
+    else if (
+      type === "income" ||
+      type === "received"
+    ) {
+
+      drcr = "CR";
+
+      runningBalance =
+        runningBalance -
+        Number(amount || 0);
+
+    }
+
+    // =========================
+    // SAVE TRANSACTION
+    // =========================
+    const data =
+      await Transaction.create({
+
+        ...req.body,
+
+        drcr,
+
+        balanceAfterEntry:
+          runningBalance,
+
+      });
+
+    res.json(data);
+
+  } catch (err) {
+
+    console.log(err);
+
+    res.status(500).json({
+      error:
+        "Failed to save transaction",
+    });
+
+  }
 });
 
-// Category Summary
-router.get("/category-summary", async (req, res) => {
-  const data = await Transaction.find({ type: "expense" });
+// =====================================
+// 📄 GET ALL TRANSACTIONS
+// =====================================
+router.get("/", async (req, res) => {
+  try {
 
-  const result = {};
+    const data =
+      await Transaction.find()
+        .populate("personId")
+        .sort({ date: -1 });
 
-  data.forEach((t) => {
-    const key = `${t.category} - ${t.subCategory}`;
+    res.json(data);
 
-    if (!result[key]) result[key] = 0;
-    result[key] += t.amount;
-  });
+  } catch (err) {
 
-  res.json(result);
+    console.log(err);
+
+    res.status(500).json({
+      error:
+        "Failed to fetch transactions",
+    });
+
+  }
 });
+
+// =====================================
+// 📒 PERSON LEDGER
+// =====================================
+router.get(
+  "/ledger/:personId",
+  async (req, res) => {
+
+    try {
+
+      const data =
+        await Transaction.find({
+          personId:
+            req.params.personId,
+        })
+          .populate("personId")
+          .sort({ date: -1 });
+
+      res.json(data);
+
+    } catch (err) {
+
+      console.log(err);
+
+      res.status(500).json({
+        error:
+          "Ledger fetch failed",
+      });
+
+    }
+
+  }
+);
+
+// =====================================
+// 📊 LEDGER BALANCE
+// =====================================
+router.get(
+  "/ledger-balance/:personId",
+  async (req, res) => {
+
+    try {
+
+      const transactions =
+        await Transaction.find({
+          personId:
+            req.params.personId,
+        });
+
+      let drTotal = 0;
+      let crTotal = 0;
+
+      transactions.forEach((t) => {
+
+        if (t.drcr === "DR") {
+          drTotal +=
+            Number(t.amount || 0);
+        }
+
+        else if (t.drcr === "CR") {
+          crTotal +=
+            Number(t.amount || 0);
+        }
+
+      });
+
+      const balance =
+        drTotal - crTotal;
+
+      res.json({
+
+        balance:
+          Math.abs(balance),
+
+        type:
+          balance >= 0
+            ? "DR"
+            : "CR",
+
+      });
+
+    } catch (err) {
+
+      console.log(err);
+
+      res.status(500).json({
+        error:
+          "Balance fetch failed",
+      });
+
+    }
+
+  }
+);
+
+// =====================================
+// 📊 SUMMARY
+// =====================================
+router.get("/summary", async (req, res) => {
+
+  try {
+
+    const data =
+      await Transaction.find();
+
+    let summary = {
+
+      income: 0,
+      expense: 0,
+      investment: 0,
+      asset: 0,
+      liability: 0,
+
+    };
+
+    data.forEach((t) => {
+
+      const amount =
+        Number(t.amount || 0);
+
+      if (t.type === "income") {
+        summary.income += amount;
+      }
+
+      if (t.type === "expense") {
+        summary.expense += amount;
+      }
+
+      if (t.type === "investment") {
+        summary.investment += amount;
+      }
+
+      if (t.type === "loan") {
+
+        if (t.subType === "asset") {
+          summary.asset += amount;
+        }
+
+        if (t.subType === "liability") {
+          summary.liability += amount;
+        }
+
+      }
+
+    });
+
+    res.json(summary);
+
+  } catch (err) {
+
+    console.log(err);
+
+    res.status(500).json({
+      error:
+        "Summary failed",
+    });
+
+  }
+
+});
+
+// =====================================
+// 📊 CATEGORY SUMMARY
+// =====================================
+router.get(
+  "/category-summary",
+  async (req, res) => {
+
+    try {
+
+      const data =
+        await Transaction.find({
+          type: "expense",
+        });
+
+      const result = {};
+
+      data.forEach((t) => {
+
+        const key =
+          `${t.category} - ${t.subCategory}`;
+
+        if (!result[key]) {
+          result[key] = 0;
+        }
+
+        result[key] +=
+          Number(t.amount || 0);
+
+      });
+
+      res.json(result);
+
+    } catch (err) {
+
+      console.log(err);
+
+      res.status(500).json({
+        error:
+          "Category summary failed",
+      });
+
+    }
+
+  }
+);
 
 module.exports = router;
