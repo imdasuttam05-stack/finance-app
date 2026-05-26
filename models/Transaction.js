@@ -1,214 +1,57 @@
 const mongoose = require("mongoose");
 
-const transactionSchema =
-  new mongoose.Schema({
-
-    type: {
-      type: String,
-
-      enum: [
-        "income",
-        "expense",const mongoose = require("mongoose");
-
-const transactionSchema =
-  new mongoose.Schema({
-
-    type: {
-      type: String,
-
-      enum: [
-        "income",
-        "expense",
-        "investment",
-        "loan",
-        "payment",
-        "received",
-      ],
-
-      required: true,
-    },
-
-    subType: {
-
-      type: String,
-
-      // asset / liability
-
-      enum: [
-        "asset",
-        "liability",
-        "",
-      ],
-
-      default: "",
-    },
-
-    category: {
-      type: String,
-      default: "",
-    },
-
-    subCategory: {
-      type: String,
-      default: "",
-    },
-
-    // =========================
-    // PERSON / LEDGER
-    // =========================
-    personId: {
-
-      type:
-        mongoose.Schema.Types.ObjectId,
-
-      ref: "Person",
-
-      default: null,
-    },
-
-    amount: {
-      type: Number,
-      required: true,
-    },
-
-    note: {
-      type: String,
-      default: "",
-    },
-
-    date: {
-      type: Date,
-      default: Date.now,
-    },
-
-    // =========================
-    // NEW DR CR
-    // =========================
-    drcr: {
-      type: String,
-
-      enum: ["DR", "CR"],
-
-      default: "",
-    },
-
-    // =========================
-    // RUNNING BALANCE
-    // =========================
-    balanceAfterEntry: {
-      type: Number,
-      default: 0,
-    },
-
-    againstId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Transaction",
-      default: null,
-    },
-
+const transactionSchema = new mongoose.Schema({
+  type: {
+    type: String,
+    enum: ["income", "expense", "investment", "loan", "payment", "received"],
+    required: true,
   },
-
-  {
-    timestamps: true,
-  }
-);
-
-module.exports =
-  mongoose.model(
-    "Transaction",
-    transactionSchema
-  );
-
-        "investment",
-        "loan",
-        "payment",
-        "received",
-      ],
-
-      required: true,
-    },
-
-    subType: {
-
-      type: String,
-
-      // asset / liability
-
-      enum: [
-        "asset",
-        "liability",
-        "",
-      ],
-
-      default: "",
-    },
-
-    category: {
-      type: String,
-      default: "",
-    },
-
-    subCategory: {
-      type: String,
-      default: "",
-    },
-
-    // =========================
-    // PERSON / LEDGER
-    // =========================
-    personId: {
-
-      type:
-        mongoose.Schema.Types.ObjectId,
-
-      ref: "Person",
-
-      default: null,
-    },
-
-    amount: {
-      type: Number,
-      required: true,
-    },
-
-    note: {
-      type: String,
-      default: "",
-    },
-
-    date: {
-      type: Date,
-      default: Date.now,
-    },
-
-    // =========================
-    // NEW DR CR
-    // =========================
-    drcr: {
-      type: String,
-
-      enum: ["DR", "CR"],
-
-      default: "",
-    },
-
-    // =========================
-    // RUNNING BALANCE
-    // =========================
-    balanceAfterEntry: {
-      type: Number,
-      default: 0,
-    },
-
+  subType: {
+    type: String,
+    enum: ["asset", "liability", ""],
+    default: "",
   },
+  category: {
+    type: String,
+    default: "",
+  },
+  subCategory: {
+    type: String,
+    default: "",
+  },
+  personId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Person",
+    default: null,
+  },
+  amount: {
+    type: Number,
+    required: true,
+  },
+  note: {
+    type: String,
+    default: "",
+  },
+  date: {
+    type: Date,
+    default: Date.now,
+  },
+  drcr: {
+    type: String,
+    enum: ["DR", "CR"],
+    default: "",
+  },
+  balanceAfterEntry: {
+    type: Number,
+    default: 0,
+  },
+  againstId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Transaction",
+    default: null,
+  },
+}, {
+  timestamps: true,
+});
 
-  {
-    timestamps: true,
-  }
-);
-
-module.exports =
-  mongoose.model(
-    "Transaction",
-    transactionSchema
-  );
+module.exports = mongoose.model("Transaction", transactionSchema);
