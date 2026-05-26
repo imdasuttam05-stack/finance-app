@@ -13,6 +13,7 @@ router.post("/", async (req, res) => {
       personId,
       type,
       amount,
+      againstId,
     } = req.body;
 
     // =========================
@@ -143,6 +144,7 @@ router.get(
             req.params.personId,
         })
           .populate("personId")
+          .populate("againstId")
           .sort({ date: -1 });
 
       res.json(data);
