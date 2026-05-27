@@ -16,6 +16,7 @@ router.get("/", async (req, res) => {
 router.post("/", async (req, res) => {
   try {
     const name = String(req.body?.name || "").trim();
+    const mobile = String(req.body?.mobile || "").trim();
 
     if (!name) {
       return res.status(400).json({ error: "Ledger name required" });
@@ -26,7 +27,7 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: "Ledger already exists" });
     }
 
-    const person = await Person.create({ name });
+    const person = await Person.create({ name, mobile });
     res.json(person);
 
   } catch (err) {
