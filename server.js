@@ -9,14 +9,32 @@ const PORT = process.env.PORT || 5000;
 // ==========================
 // ✅ DB CONNECT
 // ==========================
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log("✅ MongoDB Connected"))
-  .catch((err) => console.error("❌ DB Error:", err));
+const rawMongoUri = process.env.MONGODB_URI;
+const mongoUri = rawMongoUri && rawMongoUri.trim() && !["undefined", "null"].includes(rawMongoUri.trim().toLowerCase())
+  ? rawMongoUri.trim()
+  : "mongodb://127.0.0.1:27017/finance-app";
+
+console.log(
+  `MongoDB URI source: ${mongoUri === "mongodb://127.0.0.1:27017/finance-app" ? "fallback" : "env"}`
+);
+
+mongoose.connect(mongoUri)
+  .then(() => {
+    console.log("✅ MongoDB Connected");
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running on http://localhost:${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error("❌ DB Error:", err);
+    process.exit(1);
+  });
 
 // ==========================
 // ✅ MODELS
 // ==========================
 const Transaction = require("./models/Transaction");
+const transactionRoutes = require("./routes/transactionRoutes");
 
 // ==========================
 // ✅ MIDDLEWARE
@@ -33,6 +51,12 @@ app.use(
 
 app.use(express.json());
 
+// REQUEST LOGGING
+app.use((req, res, next) => {
+  console.log("REQ", req.method, req.originalUrl, JSON.stringify(req.body));
+  next();
+});
+
 // SAFE NUMBER FIX
 app.use((req, res, next) => {
   if (req.body?.amount !== undefined) {
@@ -47,6 +71,7 @@ app.use((req, res, next) => {
 // ==========================
 app.use("/api/persons", require("./routes/personRoutes"));
 app.use("/api/auth", require("./routes/authRoutes"));
+app.use("/api/transactions", transactionRoutes);
 
 // ==========================
 // 📊 SUMMARY
@@ -423,13 +448,4 @@ app.get(
 // ==========================
 app.get("/", (req, res) => {
   res.send("✅ API running...");
-});
-
-// ==========================
-// 🚀 START
-// ==========================
-app.listen(PORT, () => {
-  console.log(
-    `🚀 Server running on http://localhost:${PORT}`
-  );
 });
