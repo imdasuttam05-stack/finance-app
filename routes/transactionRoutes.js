@@ -16,6 +16,15 @@ router.post("/", async (req, res) => {
       againstId,
     } = req.body;
 
+    if (
+      ["loan", "investment", "payment", "received"].includes(type) &&
+      !personId
+    ) {
+      return res.status(400).json({
+        error: "Ledger selection is required for this transaction type",
+      });
+    }
+
     // =========================
     // PREVIOUS LEDGER BALANCE
     // =========================
