@@ -165,6 +165,15 @@ app.post("/api/transactions", async (req, res) => {
       amount,
     } = req.body;
 
+    if (
+      ["loan", "investment", "payment", "received"].includes(type) &&
+      !personId
+    ) {
+      return res.status(400).json({
+        error: "Ledger selection is required for this transaction type",
+      });
+    }
+
     // ======================
     // OLD LEDGER BALANCE
     // ======================
