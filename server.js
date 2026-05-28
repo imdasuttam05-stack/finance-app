@@ -46,6 +46,7 @@ app.use((req, res, next) => {
 // 📒 ROUTES
 // ==========================
 app.use("/api/persons", require("./routes/personRoutes"));
+app.use("/api/auth", require("./routes/authRoutes"));
 
 // ==========================
 // 📊 SUMMARY
