@@ -1,13 +1,31 @@
 const express = require("express");
+const fs = require("fs");
+const path = require("path");
 const router = express.Router();
 
 const User = require("../models/User");
+const debugLog = path.resolve(__dirname, "../auth-debug.log");
+
+const logDebug = (message, data) => {
+  const payload = {
+    timestamp: new Date().toISOString(),
+    message,
+    data,
+  };
+
+  try {
+    fs.appendFileSync(debugLog, JSON.stringify(payload) + "\n");
+  } catch (appendErr) {
+    console.error("Failed to write auth debug log:", appendErr);
+  }
+};
 
 const generateOTP = () => {
   return String(Math.floor(100000 + Math.random() * 900000));
 };
 
 router.post("/request-otp", async (req, res) => {
+  logDebug("request-otp received", { body: req.body });
   try {
     const { mobile } = req.body;
 
@@ -43,9 +61,15 @@ router.post("/request-otp", async (req, res) => {
       demoOtp: otpCode,
     });
   } catch (err) {
+    logDebug("REQUEST OTP ERROR", {
+      error: err,
+      errorDetails: JSON.stringify(err, Object.getOwnPropertyNames(err), 2),
+    });
     console.error("REQUEST OTP ERROR:", err);
     res.status(500).json({
       error: "Failed to request OTP",
+      details: err?.message || String(err),
+      rawError: JSON.stringify(err, Object.getOwnPropertyNames(err)),
     });
   }
 });
