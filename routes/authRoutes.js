@@ -1,10 +1,28 @@
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
+const twilio = require("twilio");
 const router = express.Router();
 
 const User = require("../models/User");
 const debugLog = path.resolve(__dirname, "../auth-debug.log");
+
+const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
+const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
+const TWILIO_FROM_NUMBER = process.env.TWILIO_FROM_NUMBER;
+const twilioClient = TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN ? twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) : null;
+
+const sendOtpSms = async (to, otpCode) => {
+  if (!twilioClient || !TWILIO_FROM_NUMBER) {
+    throw new Error("Twilio SMS is not configured.");
+  }
+
+  return twilioClient.messages.create({
+    body: `Your OTP is ${otpCode}. It expires in 5 minutes.`,
+    from: TWILIO_FROM_NUMBER,
+    to,
+  });
+};
 
 const logDebug = (message, data) => {
   const payload = {
@@ -53,13 +71,43 @@ router.post("/request-otp", async (req, res) => {
 
     await user.save();
 
-    console.log(`OTP for ${normalizedMobile}: ${otpCode}`);
+    let smsSent = false;
+    let smsError = null;
 
-    res.json({
+    try {
+      if (twilioClient && TWILIO_FROM_NUMBER) {
+        await sendOtpSms(normalizedMobile, otpCode);
+        smsSent = true;
+      } else {
+        console.warn("Twilio SMS not configured. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER.");
+      }
+    } catch (sendErr) {
+      smsError = sendErr;
+      console.error("OTP SMS send error:", sendErr);
+    }
+
+    console.log(`OTP for ${normalizedMobile}: ${otpCode} (smsSent=${smsSent})`);
+
+    const includeDemoOtp = process.env.NODE_ENV !== "production" || process.env.DEBUG_OTP === "true";
+    const response = {
       success: true,
-      message: "OTP sent to your mobile number",
-      demoOtp: otpCode,
-    });
+      message: smsSent
+        ? "OTP sent to your mobile number"
+        : "OTP generated but SMS is not configured. Check backend SMS settings.",
+    };
+
+    if (includeDemoOtp) {
+      response.demoOtp = otpCode;
+    }
+
+    if (!smsSent && process.env.NODE_ENV === "production") {
+      return res.status(500).json({
+        error: "Failed to send OTP SMS. SMS provider is not configured.",
+        details: smsError?.message || "No Twilio configuration found.",
+      });
+    }
+
+    res.json(response);
   } catch (err) {
     logDebug("REQUEST OTP ERROR", {
       error: err,
