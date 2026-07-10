@@ -10,7 +10,10 @@ const debugLog = path.resolve(__dirname, "../auth-debug.log");
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
 const TWILIO_FROM_NUMBER = process.env.TWILIO_FROM_NUMBER;
-const twilioClient = TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN ? twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN) : null;
+
+const twilioClient = TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_FROM_NUMBER
+  ? twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+  : null;
 
 const sendOtpSms = async (to, otpCode) => {
   if (!twilioClient || !TWILIO_FROM_NUMBER) {
@@ -232,8 +235,9 @@ router.post("/register", async (req, res) => {
     user.password = password;
     user.isRegistered = true;
 
-    // Generate unique userId
-    user.generateUserId();
+    if (!user.userId) {
+      user.generateUserId();
+    }
 
     await user.save();
 
