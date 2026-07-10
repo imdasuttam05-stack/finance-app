@@ -9,6 +9,10 @@ const Transaction = require("../models/Transaction");
 router.post("/", async (req, res) => {
   try {
 
+    if (!req.userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
     const {
       personId,
       type,
@@ -30,6 +34,7 @@ router.post("/", async (req, res) => {
     // =========================
     const oldTransactions =
       await Transaction.find({
+        userId: req.userId,
         personId,
       });
 
@@ -91,6 +96,7 @@ router.post("/", async (req, res) => {
       await Transaction.create({
 
         ...req.body,
+        userId: req.userId,
 
         drcr,
 
@@ -119,8 +125,12 @@ router.post("/", async (req, res) => {
 router.get("/", async (req, res) => {
   try {
 
+    if (!req.userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
     const data =
-      await Transaction.find()
+      await Transaction.find({ userId: req.userId })
         .populate("personId")
         .sort({ date: -1 });
 
@@ -149,6 +159,7 @@ router.get(
 
       const data =
         await Transaction.find({
+          userId: req.userId,
           personId:
             req.params.personId,
         })
@@ -183,6 +194,7 @@ router.get(
 
       const transactions =
         await Transaction.find({
+          userId: req.userId,
           personId:
             req.params.personId,
         });
@@ -240,8 +252,12 @@ router.get("/summary", async (req, res) => {
 
   try {
 
+    if (!req.userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
     const data =
-      await Transaction.find();
+      await Transaction.find({ userId: req.userId });
 
     let summary = {
 
@@ -308,8 +324,13 @@ router.get(
 
     try {
 
-      const data =
-        await Transaction.find({
+if (!req.userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const data =
+      await Transaction.find({
+        userId: req.userId,
           type: "expense",
         });
 
