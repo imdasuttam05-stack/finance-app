@@ -51,6 +51,11 @@ app.use(
 
 app.use(express.json());
 
+app.use((req, res, next) => {
+  req.userId = req.get("x-user-id") || req.headers["x-user-id"] || "";
+  next();
+});
+
 // REQUEST LOGGING
 app.use((req, res, next) => {
   console.log("REQ", req.method, req.originalUrl, JSON.stringify(req.body));
