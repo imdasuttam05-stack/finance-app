@@ -74,9 +74,10 @@ router.post("/request-otp", async (req, res) => {
 
     let smsSent = false;
     let smsError = null;
+    const smsConfigured = Boolean(twilioClient && TWILIO_FROM_NUMBER);
 
     try {
-      if (twilioClient && TWILIO_FROM_NUMBER) {
+      if (smsConfigured) {
         await sendOtpSms(normalizedMobile, otpCode);
         smsSent = true;
       } else {
@@ -87,26 +88,26 @@ router.post("/request-otp", async (req, res) => {
       console.error("OTP SMS send error:", sendErr);
     }
 
-    console.log(`OTP for ${normalizedMobile}: ${otpCode} (smsSent=${smsSent})`);
+    console.log(`OTP for ${normalizedMobile}: ${otpCode} (smsSent=${smsSent}, smsConfigured=${smsConfigured})`);
 
-    const includeDemoOtp = process.env.NODE_ENV !== "production" || process.env.DEBUG_OTP === "true";
+    const includeDemoOtp = process.env.NODE_ENV !== "production" || process.env.DEBUG_OTP === "true" || !smsConfigured;
     const response = {
       success: true,
       message: smsSent
         ? "OTP sent to your mobile number"
-        : "OTP generated but SMS is not configured. Check backend SMS settings.",
+        : smsConfigured
+          ? "OTP generated but SMS could not be delivered."
+          : "OTP generated. SMS provider is not configured, so use the demo OTP below.",
       isNewUser: !user.isRegistered,
+      smsConfigured,
     };
 
     if (includeDemoOtp) {
       response.demoOtp = otpCode;
     }
 
-    if (!smsSent && process.env.NODE_ENV === "production") {
-      return res.status(500).json({
-        error: "Failed to send OTP SMS. SMS provider is not configured.",
-        details: smsError?.message || "No Twilio configuration found.",
-      });
+    if (!smsSent && smsError) {
+      response.smsError = smsError.message;
     }
 
     res.json(response);
