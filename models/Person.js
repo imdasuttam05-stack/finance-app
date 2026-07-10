@@ -1,10 +1,15 @@
 const mongoose = require("mongoose");
 
 const PersonSchema = new mongoose.Schema({
+  userId: {
+    type: String,
+    required: true,
+    trim: true,
+    index: true,
+  },
   name: {
     type: String,
     required: true,
-    unique: true,
     trim: true,
   },
   mobile: {
