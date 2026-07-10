@@ -5,7 +5,11 @@ const Person = require("../models/Person");
 // 📌 GET ALL LEDGERS
 router.get("/", async (req, res) => {
   try {
-    const data = await Person.find().sort({ name: 1 });
+    if (!req.userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const data = await Person.find({ userId: req.userId }).sort({ name: 1 });
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: "Failed to load ledgers" });
@@ -22,12 +26,16 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: "Ledger name required" });
     }
 
-    const exists = await Person.findOne({ name });
+    if (!req.userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const exists = await Person.findOne({ userId: req.userId, name });
     if (exists) {
       return res.status(400).json({ error: "Ledger already exists" });
     }
 
-    const person = await Person.create({ name, mobile });
+    const person = await Person.create({ userId: req.userId, name, mobile });
     res.json(person);
 
   } catch (err) {
