@@ -321,12 +321,50 @@ router.post("/login", async (req, res) => {
         username: user.username,
         email: user.email,
         mobile: user.mobile,
+        isApproved: user.isApproved,
       },
     });
   } catch (err) {
     console.error("LOGIN ERROR:", err);
     res.status(500).json({
       error: "Login failed",
+      details: err?.message || String(err),
+    });
+  }
+});
+
+// Admin endpoint: get pending approval users
+router.get("/pending-users", async (req, res) => {
+  try {
+    const secret = req.query.secret || req.headers["x-admin-secret"];
+
+    if (!ADMIN_SECRET) {
+      return res.status(500).json({
+        error: "Admin approval is not configured. Set ADMIN_SECRET in environment."
+      });
+    }
+
+    if (secret !== ADMIN_SECRET) {
+      return res.status(401).json({
+        error: "Unauthorized request"
+      });
+    }
+
+    const users = await User.find({
+      isRegistered: true,
+      isApproved: false,
+    })
+      .select("userId username email mobile createdAt")
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      users,
+    });
+  } catch (err) {
+    console.error("PENDING USERS ERROR:", err);
+    res.status(500).json({
+      error: "Failed to load pending users",
       details: err?.message || String(err),
     });
   }
