@@ -505,4 +505,59 @@ router.post("/approve-user", async (req, res) => {
   }
 });
 
+// Admin endpoint: reject a registered user (mark as not registered / not approved)
+router.post("/reject-user", async (req, res) => {
+  try {
+    const { userId, secret } = req.body;
+    const isAuthorizedAdmin = secret === ADMIN_SECRET || (await isAdminRequest(req));
+
+    if (!ADMIN_SECRET && !(await isAdminRequest(req))) {
+      return res.status(500).json({
+        error: "Admin approval is not configured. Set ADMIN_SECRET in environment."
+      });
+    }
+
+    if (!isAuthorizedAdmin) {
+      return res.status(401).json({
+        error: "Unauthorized rejection request"
+      });
+    }
+
+    if (!userId) {
+      return res.status(400).json({
+        error: "userId is required"
+      });
+    }
+
+    const user = await User.findOne({ userId });
+    if (!user) {
+      return res.status(404).json({
+        error: "User not found"
+      });
+    }
+
+    // Mark user as not registered / not approved so they cannot login
+    user.isApproved = false;
+    user.isRegistered = false;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: "User rejected successfully",
+      user: {
+        userId: user.userId,
+        username: user.username,
+        email: user.email,
+        mobile: user.mobile,
+      },
+    });
+  } catch (err) {
+    console.error("REJECTION ERROR:", err);
+    res.status(500).json({
+      error: "Rejection failed",
+      details: err?.message || String(err),
+    });
+  }
+});
+
 module.exports = router;
