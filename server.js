@@ -9,14 +9,15 @@ const PORT = process.env.PORT || 5000;
 // ==========================
 // ✅ DB CONNECT
 // ==========================
-const rawMongoUri = process.env.MONGODB_URI;
-const mongoUri = rawMongoUri && rawMongoUri.trim() && !["undefined", "null"].includes(rawMongoUri.trim().toLowerCase())
-  ? rawMongoUri.trim()
-  : "mongodb://127.0.0.1:27017/finance-app";
+const rawMongoUri = process.env.MONGODB_URI?.trim();
 
-console.log(
-  `MongoDB URI source: ${mongoUri === "mongodb://127.0.0.1:27017/finance-app" ? "fallback" : "env"}`
-);
+if (!rawMongoUri || ["undefined", "null"].includes(rawMongoUri.toLowerCase())) {
+  console.error("❌ MONGODB_URI is not configured. Set MONGODB_URI to your MongoDB Atlas connection string.");
+  process.exit(1);
+}
+
+const mongoUri = rawMongoUri;
+console.log(`MongoDB URI source: env`);
 
 mongoose.connect(mongoUri)
   .then(() => {
@@ -39,12 +40,21 @@ const transactionRoutes = require("./routes/transactionRoutes");
 // ==========================
 // ✅ MIDDLEWARE
 // ==========================
+const defaultOrigins = [
+  "http://localhost:3000",
+  "https://finance-app-frontend-blush.vercel.app",
+];
+
+const envOrigins = (process.env.CORS_ORIGIN || process.env.CORS_ORIGINS || "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+const allowedOrigins = [...new Set([...defaultOrigins, ...envOrigins])];
+
 app.use(
   cors({
-    origin: [
-      "http://localhost:3000",
-      "https://finance-app-frontend-blush.vercel.app",
-    ],
+    origin: allowedOrigins,
     credentials: true,
   })
 );
