@@ -55,6 +55,35 @@ const generateOTP = () => {
   return String(Math.floor(100000 + Math.random() * 900000));
 };
 
+const isAdminCredentialLogin = (username, password) => {
+  const defaultAdminUsername = "admin";
+  const defaultAdminPassword = "Admin@1234";
+  const adminUsername = (process.env.ADMIN_USERNAME || defaultAdminUsername).trim();
+  const adminPassword = (process.env.ADMIN_PASSWORD || defaultAdminPassword).trim();
+  const normalizedUsername = (username || "").trim().toLowerCase();
+  const normalizedPassword = (password || "").trim();
+  const adminEmail = (process.env.ADMIN_EMAIL || "").trim().toLowerCase();
+
+  return Boolean(
+    adminUsername &&
+    adminPassword &&
+    normalizedUsername &&
+    normalizedPassword &&
+    (normalizedUsername === adminUsername.toLowerCase() || normalizedUsername === adminEmail) &&
+    normalizedPassword === adminPassword
+  );
+};
+
+const isAdminRequest = async (req) => {
+  const requesterUserId = req.headers["x-user-id"];
+  if (!requesterUserId) {
+    return false;
+  }
+
+  const requester = await User.findOne({ userId: requesterUserId });
+  return Boolean(requester?.isAdmin);
+};
+
 // Request OTP for registration or login
 router.post("/request-otp", async (req, res) => {
   logDebug("request-otp received", { body: req.body });
@@ -284,10 +313,59 @@ router.post("/login", async (req, res) => {
       });
     }
 
+    const incomingUsername = username.trim();
+    const incomingPassword = password.trim();
+
+    if (isAdminCredentialLogin(incomingUsername, incomingPassword)) {
+      const adminUsername = (process.env.ADMIN_USERNAME || "admin").trim();
+      const adminEmail = (process.env.ADMIN_EMAIL || "").trim().toLowerCase();
+      const adminPassword = (process.env.ADMIN_PASSWORD || "Admin@1234").trim();
+
+      let adminUser = await User.findOne({
+        $or: [{ username: adminUsername }, { email: adminEmail || `${adminUsername.toLowerCase()}@finance.local` }],
+      });
+
+      if (!adminUser) {
+        const mobile = `ADMIN-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+        adminUser = await User.create({
+          mobile,
+          username: adminUsername,
+          email: adminEmail || `${adminUsername.toLowerCase()}@finance.local`,
+          password: adminPassword,
+          isRegistered: true,
+          isApproved: true,
+          isAdmin: true,
+        });
+      } else {
+        adminUser.username = adminUsername;
+        adminUser.email = adminEmail || `${adminUsername.toLowerCase()}@finance.local`;
+        adminUser.password = adminPassword;
+        adminUser.isRegistered = true;
+        adminUser.isApproved = true;
+        adminUser.isAdmin = true;
+        await adminUser.save();
+      }
+
+      return res.json({
+        success: true,
+        message: "Admin login successful",
+        user: {
+          id: adminUser._id,
+          userId: adminUser.userId,
+          username: adminUser.username,
+          email: adminUser.email,
+          mobile: adminUser.mobile,
+          isApproved: adminUser.isApproved,
+          isAdmin: true,
+          role: "admin",
+        },
+      });
+    }
+
     const user = await User.findOne({
       $or: [
-        { username: username.trim() },
-        { email: username.trim().toLowerCase() },
+        { username: incomingUsername },
+        { email: incomingUsername.toLowerCase() },
       ],
       isRegistered: true,
     });
@@ -304,7 +382,7 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    const isPasswordValid = await user.comparePassword(password);
+    const isPasswordValid = await user.comparePassword(incomingPassword);
 
     if (!isPasswordValid) {
       return res.status(400).json({
@@ -322,6 +400,8 @@ router.post("/login", async (req, res) => {
         email: user.email,
         mobile: user.mobile,
         isApproved: user.isApproved,
+        isAdmin: user.isAdmin || false,
+        role: user.isAdmin ? "admin" : "user",
       },
     });
   } catch (err) {
@@ -337,14 +417,15 @@ router.post("/login", async (req, res) => {
 router.get("/pending-users", async (req, res) => {
   try {
     const secret = req.query.secret || req.headers["x-admin-secret"];
+    const isAuthorizedAdmin = secret === ADMIN_SECRET || (await isAdminRequest(req));
 
-    if (!ADMIN_SECRET) {
+    if (!ADMIN_SECRET && !(await isAdminRequest(req))) {
       return res.status(500).json({
         error: "Admin approval is not configured. Set ADMIN_SECRET in environment."
       });
     }
 
-    if (secret !== ADMIN_SECRET) {
+    if (!isAuthorizedAdmin) {
       return res.status(401).json({
         error: "Unauthorized request"
       });
@@ -374,14 +455,15 @@ router.get("/pending-users", async (req, res) => {
 router.post("/approve-user", async (req, res) => {
   try {
     const { userId, secret } = req.body;
+    const isAuthorizedAdmin = secret === ADMIN_SECRET || (await isAdminRequest(req));
 
-    if (!ADMIN_SECRET) {
+    if (!ADMIN_SECRET && !(await isAdminRequest(req))) {
       return res.status(500).json({
         error: "Admin approval is not configured. Set ADMIN_SECRET in environment."
       });
     }
 
-    if (secret !== ADMIN_SECRET) {
+    if (!isAuthorizedAdmin) {
       return res.status(401).json({
         error: "Unauthorized approval request"
       });
