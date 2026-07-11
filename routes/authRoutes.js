@@ -10,10 +10,20 @@ const debugLog = path.resolve(__dirname, "../auth-debug.log");
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
 const TWILIO_FROM_NUMBER = process.env.TWILIO_FROM_NUMBER;
+const ADMIN_SECRET = process.env.ADMIN_SECRET || "";
 
-const twilioClient = TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN && TWILIO_FROM_NUMBER
-  ? twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
-  : null;
+const twilioClient = (() => {
+  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_FROM_NUMBER) {
+    return null;
+  }
+
+  try {
+    return twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+  } catch (err) {
+    console.warn("Twilio initialization failed:", err?.message || err);
+    return null;
+  }
+})();
 
 const sendOtpSms = async (to, otpCode) => {
   if (!twilioClient || !TWILIO_FROM_NUMBER) {
@@ -234,6 +244,7 @@ router.post("/register", async (req, res) => {
     user.email = normalizedEmail;
     user.password = password;
     user.isRegistered = true;
+    user.isApproved = false;
 
     if (!user.userId) {
       user.generateUserId();
@@ -243,13 +254,14 @@ router.post("/register", async (req, res) => {
 
     res.json({
       success: true,
-      message: "Registration successful",
+      message: "Registration successful. Your account is now pending approval.",
       user: {
         id: user._id,
         userId: user.userId,
         username: user.username,
         email: user.email,
         mobile: user.mobile,
+        isApproved: user.isApproved,
       },
     });
   } catch (err) {
@@ -286,6 +298,12 @@ router.post("/login", async (req, res) => {
       });
     }
 
+    if (!user.isApproved) {
+      return res.status(403).json({
+        error: "Your account is awaiting approval.",
+      });
+    }
+
     const isPasswordValid = await user.comparePassword(password);
 
     if (!isPasswordValid) {
@@ -309,6 +327,59 @@ router.post("/login", async (req, res) => {
     console.error("LOGIN ERROR:", err);
     res.status(500).json({
       error: "Login failed",
+      details: err?.message || String(err),
+    });
+  }
+});
+
+// Admin endpoint: approve a registered user
+router.post("/approve-user", async (req, res) => {
+  try {
+    const { userId, secret } = req.body;
+
+    if (!ADMIN_SECRET) {
+      return res.status(500).json({
+        error: "Admin approval is not configured. Set ADMIN_SECRET in environment."
+      });
+    }
+
+    if (secret !== ADMIN_SECRET) {
+      return res.status(401).json({
+        error: "Unauthorized approval request"
+      });
+    }
+
+    if (!userId) {
+      return res.status(400).json({
+        error: "userId is required"
+      });
+    }
+
+    const user = await User.findOne({ userId });
+    if (!user) {
+      return res.status(404).json({
+        error: "User not found"
+      });
+    }
+
+    user.isApproved = true;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: "User approved successfully",
+      user: {
+        userId: user.userId,
+        username: user.username,
+        email: user.email,
+        mobile: user.mobile,
+        isApproved: user.isApproved,
+      },
+    });
+  } catch (err) {
+    console.error("APPROVAL ERROR:", err);
+    res.status(500).json({
+      error: "Approval failed",
       details: err?.message || String(err),
     });
   }
