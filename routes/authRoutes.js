@@ -422,6 +422,65 @@ router.post("/login", async (req, res) => {
   }
 });
 
+// Get current user (based on x-user-id header)
+router.get("/me", async (req, res) => {
+  try {
+    const requesterUserId = req.headers["x-user-id"] || req.query.userId || req.userId;
+    if (!requesterUserId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const user = await User.findOne({ userId: requesterUserId }).select("userId username email mobile isApproved isAdmin createdAt updatedAt");
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json({ success: true, user });
+  } catch (err) {
+    console.error("ME ERROR:", err);
+    res.status(500).json({ error: "Failed to load user" });
+  }
+});
+
+// Update profile for current user
+router.put("/update-profile", async (req, res) => {
+  try {
+    const requesterUserId = req.headers["x-user-id"] || req.userId;
+    if (!requesterUserId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const { username, email, mobile, password } = req.body;
+
+    const user = await User.findOne({ userId: requesterUserId });
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (username) user.username = username.trim();
+    if (email) user.email = email.trim().toLowerCase();
+    if (mobile) user.mobile = mobile.trim();
+    if (password) user.password = password; // will be hashed by pre-save hook
+
+    await user.save();
+
+    res.json({
+      success: true,
+      user: {
+        userId: user.userId,
+        username: user.username,
+        email: user.email,
+        mobile: user.mobile,
+        isApproved: user.isApproved,
+      },
+    });
+  } catch (err) {
+    console.error("UPDATE PROFILE ERROR:", err);
+    res.status(500).json({ error: "Failed to update profile", details: err?.message || String(err) });
+  }
+});
+
 // Admin endpoint: get pending approval users
 router.get("/pending-users", async (req, res) => {
   try {
