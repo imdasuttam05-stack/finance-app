@@ -327,7 +327,7 @@ router.post("/login", async (req, res) => {
 
       if (!adminUser) {
         const mobile = `ADMIN-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-        adminUser = await User.create({
+        adminUser = new User({
           mobile,
           username: adminUsername,
           email: adminEmail || `${adminUsername.toLowerCase()}@finance.local`,
@@ -336,6 +336,10 @@ router.post("/login", async (req, res) => {
           isApproved: true,
           isAdmin: true,
         });
+
+        // Ensure admin user has a generated userId so client can send x-user-id for auth
+        adminUser.generateUserId();
+        await adminUser.save();
       } else {
         adminUser.username = adminUsername;
         adminUser.email = adminEmail || `${adminUsername.toLowerCase()}@finance.local`;
@@ -343,6 +347,11 @@ router.post("/login", async (req, res) => {
         adminUser.isRegistered = true;
         adminUser.isApproved = true;
         adminUser.isAdmin = true;
+
+        if (!adminUser.userId) {
+          adminUser.generateUserId();
+        }
+
         await adminUser.save();
       }
 
