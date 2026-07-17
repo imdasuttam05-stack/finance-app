@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const Person = require("../models/Person");
+const { getPersonsByUser, isInMemoryMode } = require("../inMemoryStore");
 
 // 📌 GET ALL LEDGERS
 router.get("/", async (req, res) => {
@@ -9,8 +10,13 @@ router.get("/", async (req, res) => {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const data = await Person.find({ userId: req.userId }).sort({ name: 1 });
-    res.json(data);
+    if (!isInMemoryMode()) {
+      const data = await Person.find({ userId: req.userId }).sort({ name: 1 });
+      return res.json(data);
+    }
+
+    const data = getPersonsByUser(req.userId);
+    return res.json(data);
   } catch (err) {
     res.status(500).json({ error: "Failed to load ledgers" });
   }
