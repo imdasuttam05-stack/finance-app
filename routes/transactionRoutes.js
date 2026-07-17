@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const Transaction = require("../models/Transaction");
+const { getTransactionsByUser, getSummaryByUser, getCategorySummaryByUser, isInMemoryMode } = require("../inMemoryStore");
 
 // =====================================
 // ➕ ADD TRANSACTION
@@ -175,12 +176,21 @@ router.get("/", async (req, res) => {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const data =
-      await Transaction.find({ userId: req.userId })
-        .populate("personId")
-        .sort({ date: -1 });
+    if (!isInMemoryMode()) {
+      const data =
+        await Transaction.find({ userId: req.userId })
+          .populate("personId")
+          .sort({ date: -1 });
 
-    res.json(data);
+      return res.json(data);
+    }
+
+    const data = getTransactionsByUser(req.userId).map((item) => ({
+      ...item,
+      personId: item.personId ? { _id: item.personId, name: "Demo Ledger" } : null,
+    }));
+
+    return res.json(data);
 
   } catch (err) {
 
@@ -302,50 +312,55 @@ router.get("/summary", async (req, res) => {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const data =
-      await Transaction.find({ userId: req.userId });
+    if (!isInMemoryMode()) {
+      const data =
+        await Transaction.find({ userId: req.userId });
 
-    let summary = {
+      let summary = {
 
-      income: 0,
-      expense: 0,
-      investment: 0,
-      asset: 0,
-      liability: 0,
+        income: 0,
+        expense: 0,
+        investment: 0,
+        asset: 0,
+        liability: 0,
 
-    };
+      };
 
-    data.forEach((t) => {
+      data.forEach((t) => {
 
-      const amount =
-        Number(t.amount || 0);
+        const amount =
+          Number(t.amount || 0);
 
-      if (t.type === "income") {
-        summary.income += amount;
-      }
-
-      if (t.type === "expense") {
-        summary.expense += amount;
-      }
-
-      if (t.type === "investment") {
-        summary.investment += amount;
-      }
-
-      if (t.type === "loan") {
-
-        if (t.subType === "asset") {
-          summary.asset += amount;
+        if (t.type === "income") {
+          summary.income += amount;
         }
 
-        if (t.subType === "liability") {
-          summary.liability += amount;
+        if (t.type === "expense") {
+          summary.expense += amount;
         }
 
-      }
+        if (t.type === "investment") {
+          summary.investment += amount;
+        }
 
-    });
+        if (t.type === "loan") {
 
+          if (t.subType === "asset") {
+            summary.asset += amount;
+          }
+
+          if (t.subType === "liability") {
+            summary.liability += amount;
+          }
+
+        }
+
+      });
+
+      return res.json(summary);
+    }
+
+    const summary = getSummaryByUser(req.userId);
     res.json(summary);
 
   } catch (err) {
@@ -374,11 +389,12 @@ if (!req.userId) {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const data =
-      await Transaction.find({
-        userId: req.userId,
-          type: "expense",
-        });
+    if (!isInMemoryMode()) {
+      const data =
+        await Transaction.find({
+          userId: req.userId,
+            type: "expense",
+          });
 
       const result = {};
 
@@ -396,7 +412,11 @@ if (!req.userId) {
 
       });
 
-      res.json(result);
+      return res.json(result);
+    }
+
+    const result = getCategorySummaryByUser(req.userId);
+    res.json(result);
 
     } catch (err) {
 
