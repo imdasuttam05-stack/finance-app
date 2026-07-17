@@ -10,26 +10,34 @@ const PORT = process.env.PORT || 5000;
 // ✅ DB CONNECT
 // ==========================
 const rawMongoUri = process.env.MONGODB_URI?.trim();
+const useInMemoryFallback = !rawMongoUri || ["undefined", "null"].includes((rawMongoUri || "").toLowerCase()) || rawMongoUri.includes("<username>") || rawMongoUri.includes("cluster0.xxxxy");
 
-if (!rawMongoUri || ["undefined", "null"].includes(rawMongoUri.toLowerCase())) {
-  console.error("❌ MONGODB_URI is not configured. Set MONGODB_URI to your MongoDB Atlas connection string.");
-  process.exit(1);
+if (useInMemoryFallback) {
+  console.warn("⚠️ Using in-memory fallback because MongoDB is not configured.");
+} else {
+  console.log("MongoDB URI source: env");
 }
 
-const mongoUri = rawMongoUri;
-console.log(`MongoDB URI source: env`);
-
-mongoose.connect(mongoUri)
-  .then(() => {
-    console.log("✅ MongoDB Connected");
-    app.listen(PORT, () => {
-      console.log(`🚀 Server running on http://localhost:${PORT}`);
-    });
-  })
-  .catch((err) => {
-    console.error("❌ DB Error:", err);
-    process.exit(1);
+const startServer = () => {
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running on http://localhost:${PORT}`);
   });
+};
+
+if (!useInMemoryFallback) {
+  mongoose.connect(rawMongoUri)
+    .then(() => {
+      console.log("✅ MongoDB Connected");
+      startServer();
+    })
+    .catch((err) => {
+      console.error("❌ DB Error:", err);
+      console.warn("Falling back to in-memory mode.");
+      startServer();
+    });
+} else {
+  startServer();
+}
 
 // ==========================
 // ✅ MODELS
@@ -93,6 +101,10 @@ app.use((req, res, next) => {
 app.use("/api/persons", require("./routes/personRoutes"));
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/transactions", transactionRoutes);
+
+app.get("/api/health", (req, res) => {
+  res.json({ ok: true, mode: useInMemoryFallback ? "memory" : "mongodb" });
+});
 
 // ==========================
 // 📊 SUMMARY
