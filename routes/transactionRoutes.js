@@ -20,6 +20,11 @@ router.post("/", async (req, res) => {
       againstId,
     } = req.body;
 
+    const normalizedAgainstId =
+      againstId && String(againstId).trim()
+        ? againstId
+        : null;
+
     if (
       ["loan", "investment", "payment", "received"].includes(type) &&
       !personId
@@ -97,6 +102,7 @@ router.post("/", async (req, res) => {
 
         ...req.body,
         userId: req.userId,
+        againstId: normalizedAgainstId,
 
         drcr,
 
@@ -104,6 +110,29 @@ router.post("/", async (req, res) => {
           runningBalance,
 
       });
+
+    if (normalizedAgainstId) {
+      const targetTransaction = await Transaction.findOne({
+        _id: normalizedAgainstId,
+        userId: req.userId,
+      });
+
+      if (!targetTransaction) {
+        return res.status(404).json({
+          error: "Selected entry not found",
+        });
+      }
+
+      if (targetTransaction.againstId) {
+        return res.status(400).json({
+          error: "This entry has already been linked to another transaction",
+        });
+      }
+
+      await Transaction.findByIdAndUpdate(normalizedAgainstId, {
+        againstId: data._id,
+      });
+    }
 
     res.json(data);
 
