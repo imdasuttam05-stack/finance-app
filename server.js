@@ -201,6 +201,10 @@ app.get(
 // ==========================
 app.post("/api/transactions", async (req, res) => {
   try {
+    if (!req.userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
     const {
       personId,
       type,
@@ -273,7 +277,7 @@ app.post("/api/transactions", async (req, res) => {
     const transaction =
       await Transaction.create({
         ...req.body,
-
+        userId: req.userId,
         drcr,
 
         balanceAfterEntry:
@@ -283,6 +287,14 @@ app.post("/api/transactions", async (req, res) => {
     res.json(transaction);
   } catch (err) {
     console.error("CREATE ERROR:", err);
+
+    if (err.name === "ValidationError") {
+      return res.status(400).json({ error: err.message });
+    }
+
+    if (err.name === "CastError") {
+      return res.status(400).json({ error: "Invalid identifier provided" });
+    }
 
     res.status(500).json({
       error:
