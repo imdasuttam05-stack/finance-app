@@ -69,7 +69,12 @@ app.use((req, res, next) => {
 
 // REQUEST LOGGING
 app.use((req, res, next) => {
-  console.log("REQ", req.method, req.originalUrl, JSON.stringify(req.body));
+  const body = req.method === "GET" || req.method === "HEAD" ? {} : req.body;
+
+  console.log("REQ", req.method, req.originalUrl, {
+    userId: req.userId || null,
+    body,
+  });
   next();
 });
 
