@@ -271,6 +271,14 @@ app.post("/api/transactions", async (req, res) => {
         Number(amount || 0);
     }
 
+    // LOAN / INVESTMENT
+    else if (
+      type === "loan" ||
+      type === "investment"
+    ) {
+      drcr = req.body.subType === "liability" ? "CR" : "DR";
+    }
+
     // ======================
     // SAVE
     // ======================
