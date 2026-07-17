@@ -11,7 +11,7 @@ const isPlaceholderMongoUri = (value = "") => {
   return !normalized || ["undefined", "null"].includes(normalized.toLowerCase()) || normalized.includes("<username>") || normalized.includes("cluster0.xxxxy");
 };
 
-const isInMemoryMode = () => isPlaceholderMongoUri(process.env.MONGODB_URI);
+const isInMemoryMode = () => process.env.USE_IN_MEMORY_FALLBACK === "true" || isPlaceholderMongoUri(process.env.MONGODB_URI);
 
 const seedDemoData = () => {
   if (inMemoryData.users.length > 0 || inMemoryData.transactions.length > 0 || inMemoryData.persons.length > 0) {
