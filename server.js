@@ -348,14 +348,67 @@ app.put(
   "/api/transactions/:id",
   async (req, res) => {
     try {
-      const t =
-        await Transaction.findByIdAndUpdate(
-          req.params.id,
-          req.body,
-          {
-            new: true,
-          }
-        );
+      const existing = await Transaction.findById(req.params.id);
+
+      if (!existing) {
+        return res.status(404).json({
+          error: "Transaction not found",
+        });
+      }
+
+      const incomingAgainstId =
+        req.body.againstId && String(req.body.againstId).trim()
+          ? req.body.againstId
+          : null;
+
+      if (
+        existing.againstId &&
+        existing.againstId.toString() !== incomingAgainstId?.toString()
+      ) {
+        await Transaction.findByIdAndUpdate(existing.againstId, {
+          againstId: null,
+        });
+      }
+
+      if (incomingAgainstId) {
+        const target = await Transaction.findById(incomingAgainstId);
+
+        if (!target) {
+          return res.status(404).json({
+            error: "Selected entry not found",
+          });
+        }
+
+        if (target._id.toString() === existing._id.toString()) {
+          return res.status(400).json({
+            error: "You cannot link an entry to itself",
+          });
+        }
+
+        if (
+          target.againstId &&
+          target.againstId.toString() !== existing._id.toString()
+        ) {
+          return res.status(400).json({
+            error: "This entry has already been linked to another transaction",
+          });
+        }
+
+        await Transaction.findByIdAndUpdate(incomingAgainstId, {
+          againstId: existing._id,
+        });
+      }
+
+      const t = await Transaction.findByIdAndUpdate(
+        req.params.id,
+        {
+          ...req.body,
+          againstId: incomingAgainstId,
+        },
+        {
+          new: true,
+        }
+      );
 
       res.json(t);
     } catch (err) {
@@ -375,9 +428,25 @@ app.delete(
   "/api/transactions/:id",
   async (req, res) => {
     try {
-      await Transaction.findByIdAndDelete(
-        req.params.id
-      );
+      const existing = await Transaction.findById(req.params.id);
+
+      if (existing?.againstId) {
+        await Transaction.findByIdAndUpdate(existing.againstId, {
+          againstId: null,
+        });
+      }
+
+      const referencing = await Transaction.findOne({
+        againstId: req.params.id,
+      });
+
+      if (referencing) {
+        await Transaction.findByIdAndUpdate(referencing._id, {
+          againstId: null,
+        });
+      }
+
+      await Transaction.findByIdAndDelete(req.params.id);
 
       res.json({
         success: true,
