@@ -140,6 +140,14 @@ router.post("/", async (req, res) => {
 
     console.log(err);
 
+    if (err.name === "ValidationError") {
+      return res.status(400).json({ error: err.message });
+    }
+
+    if (err.name === "CastError") {
+      return res.status(400).json({ error: "Invalid identifier provided" });
+    }
+
     res.status(500).json({
       error:
         "Failed to save transaction",
