@@ -16,6 +16,7 @@ router.post("/", async (req, res) => {
     const {
       personId,
       type,
+      subType,
       amount,
       againstId,
     } = req.body;
