@@ -5,6 +5,7 @@ const twilio = require("twilio");
 const router = express.Router();
 
 const User = require("../models/User");
+const { authenticateUser, getUserByUserId, isInMemoryMode } = require("../inMemoryStore");
 const debugLog = path.resolve(__dirname, "../auth-debug.log");
 
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
@@ -316,6 +317,29 @@ router.post("/login", async (req, res) => {
     const incomingUsername = username.trim();
     const incomingPassword = password.trim();
 
+    if (isInMemoryMode()) {
+      const user = authenticateUser({ username: incomingUsername, password: incomingPassword });
+
+      if (!user) {
+        return res.status(400).json({ error: "Invalid credentials" });
+      }
+
+      return res.json({
+        success: true,
+        message: "Login successful",
+        user: {
+          id: user._id,
+          userId: user.userId,
+          username: user.username,
+          email: user.email,
+          mobile: user.mobile,
+          isApproved: user.isApproved,
+          isAdmin: user.isAdmin || false,
+          role: user.role || "user",
+        },
+      });
+    }
+
     if (isAdminCredentialLogin(incomingUsername, incomingPassword)) {
       const adminUsername = (process.env.ADMIN_USERNAME || "admin").trim();
       const adminEmail = (process.env.ADMIN_EMAIL || "").trim().toLowerCase();
@@ -428,6 +452,27 @@ router.get("/me", async (req, res) => {
     const requesterUserId = req.headers["x-user-id"] || req.query.userId || req.userId;
     if (!requesterUserId) {
       return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    if (isInMemoryMode()) {
+      const user = getUserByUserId(requesterUserId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      return res.json({
+        success: true,
+        user: {
+          userId: user.userId,
+          username: user.username,
+          email: user.email,
+          mobile: user.mobile,
+          isApproved: user.isApproved,
+          isAdmin: user.isAdmin || false,
+          createdAt: user.createdAt || new Date().toISOString(),
+          updatedAt: user.updatedAt || new Date().toISOString(),
+        },
+      });
     }
 
     const user = await User.findOne({ userId: requesterUserId }).select("userId username email mobile isApproved isAdmin createdAt updatedAt");
