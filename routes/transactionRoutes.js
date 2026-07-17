@@ -94,6 +94,14 @@ router.post("/", async (req, res) => {
 
     }
 
+    // LOAN / INVESTMENT
+    else if (
+      type === "loan" ||
+      type === "investment"
+    ) {
+      drcr = subType === "liability" ? "CR" : "DR";
+    }
+
     // =========================
     // SAVE TRANSACTION
     // =========================
