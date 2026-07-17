@@ -11,6 +11,7 @@ const PORT = process.env.PORT || 5000;
 // ==========================
 const rawMongoUri = process.env.MONGODB_URI?.trim();
 const useInMemoryFallback = !rawMongoUri || ["undefined", "null"].includes((rawMongoUri || "").toLowerCase()) || rawMongoUri.includes("<username>") || rawMongoUri.includes("cluster0.xxxxy");
+let activeInMemoryMode = useInMemoryFallback;
 
 if (useInMemoryFallback) {
   console.warn("⚠️ Using in-memory fallback because MongoDB is not configured.");
@@ -21,6 +22,7 @@ if (useInMemoryFallback) {
 const startServer = () => {
   app.listen(PORT, () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);
+    console.log(`Mode: ${activeInMemoryMode ? "memory" : "mongodb"}`);
   });
 };
 
@@ -33,6 +35,8 @@ if (!useInMemoryFallback) {
     .catch((err) => {
       console.error("❌ DB Error:", err);
       console.warn("Falling back to in-memory mode.");
+      activeInMemoryMode = true;
+      process.env.USE_IN_MEMORY_FALLBACK = "true";
       startServer();
     });
 } else {
@@ -103,7 +107,7 @@ app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/transactions", transactionRoutes);
 
 app.get("/api/health", (req, res) => {
-  res.json({ ok: true, mode: useInMemoryFallback ? "memory" : "mongodb" });
+  res.json({ ok: true, mode: activeInMemoryMode ? "memory" : "mongodb" });
 });
 
 // ==========================
