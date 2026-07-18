@@ -14,6 +14,7 @@ const useInMemoryFallback = !rawMongoUri || ["undefined", "null"].includes((rawM
 let activeInMemoryMode = useInMemoryFallback;
 
 if (useInMemoryFallback) {
+  process.env.USE_IN_MEMORY_FALLBACK = "true";
   console.warn("⚠️ Using in-memory fallback because MongoDB is not configured.");
 } else {
   console.log("MongoDB URI source: env");
@@ -105,6 +106,51 @@ app.use((req, res, next) => {
 app.use("/api/persons", require("./routes/personRoutes"));
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/transactions", transactionRoutes);
+
+// ==========================
+// 📱 SEND SMS
+// ==========================
+app.post("/api/send-sms", async (req, res) => {
+  try {
+    const { phoneNumber, ledgerName, date, type, amount, note } = req.body;
+
+    if (!phoneNumber) {
+      return res.status(400).json({ error: "Phone number required" });
+    }
+
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    const fromNumber = process.env.TWILIO_PHONE_NUMBER;
+
+    if (!accountSid || !authToken || !fromNumber) {
+      console.warn("⚠️ Twilio credentials not configured. SMS not sent.");
+      return res.json({ success: false, message: "SMS service not configured" });
+    }
+
+    const twilio = require("twilio");
+    const client = twilio(accountSid, authToken);
+
+    const message = [
+      "Transaction saved",
+      `Date: ${date}`,
+      `Type: ${type}`,
+      `Amount: ₹${Number(amount || 0).toFixed(2)}`,
+      `Note: ${note || "-"}`,
+      `Ledger: ${ledgerName}`,
+    ].join("\n");
+
+    await client.messages.create({
+      body: message,
+      from: fromNumber,
+      to: phoneNumber,
+    });
+
+    res.json({ success: true, message: "SMS sent" });
+  } catch (err) {
+    console.error("SMS send error:", err);
+    res.status(500).json({ error: "Failed to send SMS" });
+  }
+});
 
 app.get("/api/health", (req, res) => {
   res.json({ ok: true, mode: activeInMemoryMode ? "memory" : "mongodb" });
